@@ -9,6 +9,18 @@ import numpy.distutils.ccompiler
 import platform as plt
 import sys
 import pathlib
+import subprocess
+
+def pkgconfig(package, kw):
+    flag_map = {'-I': 'include_dirs', '-L': 'library_dirs', '-l': 'libraries'}
+    exitcode, output = subprocess.getstatusoutput(
+        'pkg-config --cflags --libs {}'.format(package))
+    if exitcode == 0:
+        for token in output.strip().split():
+            kw.setdefault(flag_map.get(token[:2]), []).append(token[2:])
+        return kw
+    else:
+        print(output)
 
 os.system('rm pyMilne.*.so pyMilne.*.cpp')
 p = pathlib.Path(sys.executable)
@@ -50,14 +62,24 @@ sysconfig.get_config_vars()['PY_LDFLAGS'] = ''
 
 comp_flags=['-Ofast','-std=c++14','-march=native','-fPIC','-fopenmp', '-I./src', '-DNDEBUG']
 
+
+pymilne_src = ["pyMilne.pyx"]
+pymilne_inc = ["./",numpy.get_include()]
+
+extension_kwargs = {
+    'sources': pymilne_src,
+    'include_dirs': pymilne_inc,
+}
+
+
+extension_kwargs = pkgconfig('eigen3', extension_kwargs)
+extension_kwargs = pkgconfig('fftw3', extension_kwargs)
+
 extension = Extension("pyMilne",
-                      sources=["pyMilne.pyx"], 
-                      include_dirs=["./",numpy.get_include(), './eigen3'],
                       language="c++",
                       extra_compile_args=comp_flags,
                       extra_link_args=link_opts,
-                      library_dirs=['./'],
-                      libraries=['fftw3'])
+                      **extension_kwargs)
 
 extension.cython_directives = {'language_level': "3"}
 
